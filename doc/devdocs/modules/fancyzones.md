@@ -135,6 +135,12 @@ FancyZones is divided into several projects:
 - Window-to-zone tracking implemented in `FancyZones::MoveSizeUpdate` function
 - Maintains history of which windows belong to which zones
 
+### Snap Maximized Window to Zone
+- Optional behavior (setting `fancyzones_snapMaximizedWindowToZone`, off by default) that snaps a window into a zone when it is maximized, instead of letting it fill the whole monitor.
+- The target zone is the one under the **pointer** (where the user clicked the Maximize button or double-clicked the title bar). On a boundary shared by multiple zones, the top-most then left-most zone wins (`Layout::ZonesFromPointPrioritizeTopLeft`).
+- There is no dedicated cross-process "maximize" WinEvent, so detection is post-hoc: while the setting is enabled, `FancyZones` registers an `EVENT_OBJECT_LOCATIONCHANGE` hook (`FancyZones::UpdateMaximizeHook`) that filters to top-level windows reporting `IsZoomed` and posts `WM_PRIV_MAXIMIZE_TO_ZONE`. The hook is unregistered when the setting is off, so there is no global location-change cost otherwise.
+- `FancyZones::SnapWindowToZoneOnMaximize` resolves the work area under the pointer, snaps via `WorkArea::Snap`, and briefly disables DWM transitions (`FancyZonesWindowUtils::SetWindowTransitionsDisabled`, re-enabled via `WM_TIMER`) to suppress the maximize→snap animation.
+
 ## Development History
 
 - FancyZones was originally developed as a proof of concept
