@@ -17,5 +17,6 @@ extern UINT WM_PRIV_SNAP_HOTKEY; // Scheduled when we receive a snap hotkey key 
 extern UINT WM_PRIV_QUICK_LAYOUT_KEY; // Scheduled when we receive a key down press to quickly apply a layout
 extern UINT WM_PRIV_SETTINGS_CHANGED; // Scheduled when a watched settings file is updated
 extern UINT WM_PRIV_SAVE_EDITOR_PARAMETERS; // Scheduled to request saving editor-parameters.json
+extern UINT WM_PRIV_MAXIMIZE_TO_ZONE; // Scheduled when a maximized window should be snapped to the zone under its center
 
 void InitializeWinhookEventIds();

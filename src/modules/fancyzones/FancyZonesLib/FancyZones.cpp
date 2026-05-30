@@ -70,7 +70,7 @@ struct FancyZones : public winrt::implements<FancyZones, IFancyZones, IFancyZone
 {
 public:
     FancyZones(HINSTANCE hinstance, std::function<void()> disableModuleCallbackFunction) noexcept :
-        SettingsObserver({ SettingId::EditorHotkey, SettingId::WindowSwitching, SettingId::PrevTabHotkey, SettingId::NextTabHotkey, SettingId::SpanZonesAcrossMonitors }),
+        SettingsObserver({ SettingId::EditorHotkey, SettingId::WindowSwitching, SettingId::PrevTabHotkey, SettingId::NextTabHotkey, SettingId::SpanZonesAcrossMonitors, SettingId::SnapMaximizedWindowToZone }),
         m_hinstance(hinstance),
         m_draggingState([this]() {
             PostMessageW(m_window, WM_PRIV_LOCATIONCHANGE, NULL, NULL);
@@ -144,6 +144,9 @@ public:
     void WindowCreated(HWND window) noexcept;
     void ToggleEditor() noexcept;
 
+    void UpdateMaximizeHook() noexcept;
+    void SnapWindowToZoneOnMaximize(HWND window, POINT ptScreen) noexcept;
+
     LRESULT WndProc(HWND, UINT, WPARAM, LPARAM) noexcept;
     void OnKeyboardInput(WPARAM flags, HRAWINPUT hInput) noexcept;
     void OnDisplayChange(DisplayChangeType changeType) noexcept;
@@ -175,6 +178,7 @@ private:
     const HINSTANCE m_hinstance{};
 
     HWND m_window{};
+    HWINEVENTHOOK m_maximizeWinEventHook{}; // Active only while "snap maximized window to zone" is enabled
     std::unique_ptr<WindowMouseSnap> m_windowMouseSnapper{};
     WindowKeyboardSnap m_windowKeyboardSnapper{};
     WorkAreaConfiguration m_workAreaConfiguration;
@@ -208,6 +212,35 @@ private:
 };
 
 std::function<void()> FancyZones::disableModuleCallback = {};
+
+// Target window for the "snap maximized window to zone" WinEvent hook callback. The callback is a
+// free function (SetWinEventHook provides no user context), so the window to notify is kept here.
+static HWND g_maximizeHookWindow = nullptr;
+
+// How long (ms) to keep DWM transitions disabled on a window after snapping it out of the maximized
+// state, so the asynchronous window placement settles before animations are restored.
+constexpr UINT MaximizeSnapTransitionResetDelay = 250;
+
+// Out-of-context WinEvent callback used to detect a window being maximized. It runs on the main
+// thread's message loop. We only react to top-level windows that are currently maximized; resizing
+// the window into a zone restores it (no longer zoomed), which prevents re-entrancy.
+static void CALLBACK MaximizeWinEventProc(HWINEVENTHOOK /*hook*/, DWORD event, HWND window, LONG idObject, LONG idChild, DWORD /*eventThread*/, DWORD /*eventTime*/)
+{
+    if (event != EVENT_OBJECT_LOCATIONCHANGE || idObject != OBJID_WINDOW || idChild != CHILDID_SELF || !window)
+    {
+        return;
+    }
+
+    if (!IsZoomed(window))
+    {
+        return;
+    }
+
+    if (g_maximizeHookWindow)
+    {
+        PostMessageW(g_maximizeHookWindow, WM_PRIV_MAXIMIZE_TO_ZONE, reinterpret_cast<WPARAM>(window), 0);
+    }
+}
 
 // IFancyZones
 IFACEMETHODIMP_(void)
@@ -278,6 +311,9 @@ FancyZones::Run() noexcept
     AppliedLayouts::instance().AdjustWorkAreaIds(monitors);
     AppZoneHistory::instance().AdjustWorkAreaIds(monitors);
 
+    g_maximizeHookWindow = m_window;
+    UpdateMaximizeHook();
+
     PostMessage(m_window, WM_PRIV_INIT, 0, 0);
 }
 
@@ -287,6 +323,14 @@ FancyZones::Destroy() noexcept
 {
     m_workAreaConfiguration.Clear();
     BufferedPaintUnInit();
+
+    if (m_maximizeWinEventHook)
+    {
+        UnhookWinEvent(m_maximizeWinEventHook);
+        m_maximizeWinEventHook = nullptr;
+    }
+    g_maximizeHookWindow = nullptr;
+
     if (m_window)
     {
         DestroyWindow(m_window);
@@ -468,6 +512,92 @@ void FancyZones::WindowCreated(HWND window) noexcept
     }
 }
 
+void FancyZones::UpdateMaximizeHook() noexcept
+{
+    const bool enabled = FancyZonesSettings::settings().snapMaximizedWindowToZone;
+
+    if (enabled && !m_maximizeWinEventHook)
+    {
+        // A persistent location-change hook is the only reliable cross-process signal
+        // for a window being maximized, so it is only registered while the feature is turned on.
+        m_maximizeWinEventHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE,
+                                                 EVENT_OBJECT_LOCATIONCHANGE,
+                                                 nullptr,
+                                                 MaximizeWinEventProc,
+                                                 0,
+                                                 0,
+                                                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        if (!m_maximizeWinEventHook)
+        {
+            Logger::error(L"Failed to register the maximize-to-zone event hook");
+        }
+    }
+    else if (!enabled && m_maximizeWinEventHook)
+    {
+        if (UnhookWinEvent(m_maximizeWinEventHook))
+        {
+            m_maximizeWinEventHook = nullptr;
+        }
+    }
+}
+
+void FancyZones::SnapWindowToZoneOnMaximize(HWND window, POINT ptScreen) noexcept
+{
+    if (!FancyZonesSettings::settings().snapMaximizedWindowToZone)
+    {
+        return;
+    }
+
+    // The window may already have been restored by the time this message is processed
+    // (several location-change events can be queued for a single maximize), so re-validate it here.
+    if (!FancyZonesWindowUtils::IsWindowMaximized(window) || !FancyZonesWindowProcessing::IsProcessableManually(window))
+    {
+        return;
+    }
+
+    // Snap to the zone under the pointer: that's where the user clicked to maximize, whether via the
+    // Maximize button or a title-bar double-click. The cursor keeps its screen position when the
+    // window maximizes, so it still points at the zone the window came from.
+    HMONITOR monitor = nullptr;
+    if (!FancyZonesSettings::settings().spanZonesAcrossMonitors)
+    {
+        monitor = MonitorFromPoint(ptScreen, MONITOR_DEFAULTTONULL);
+    }
+
+    auto workArea = m_workAreaConfiguration.GetWorkArea(monitor);
+    if (!workArea)
+    {
+        return;
+    }
+
+    const auto& layout = workArea->GetLayout();
+    if (!layout || layout->Zones().empty())
+    {
+        return;
+    }
+
+    // Convert the pointer position from screen coordinates to the work area window's client
+    // coordinates (zone space).
+    POINT ptClient = ptScreen;
+    MapWindowPoints(nullptr, workArea->GetWorkAreaWindow(), &ptClient, 1);
+
+    const auto zones = layout->ZonesFromPointPrioritizeTopLeft(ptClient);
+    if (zones.empty())
+    {
+        // The pointer isn't over any zone; leave the window maximized as usual.
+        return;
+    }
+
+    Trace::FancyZones::SnapNewWindowIntoZone(layout.get(), workArea->GetLayoutWindows());
+
+    // Suppress the maximize/restore animation so the window snaps straight into the zone instead of
+    // visibly animating out to the full monitor and back. Transitions are re-enabled shortly after
+    // (via WM_TIMER), once the asynchronous window placement has settled.
+    FancyZonesWindowUtils::SetWindowTransitionsDisabled(window, true);
+    workArea->Snap(window, zones);
+    SetTimer(m_window, reinterpret_cast<UINT_PTR>(window), MaximizeSnapTransitionResetDelay, nullptr);
+}
+
 // IFancyZonesCallback
 IFACEMETHODIMP_(bool)
 FancyZones::OnKeyDown(PKBDLLHOOKSTRUCT info) noexcept
@@ -619,6 +749,15 @@ LRESULT FancyZones::WndProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     }
     break;
 
+    case WM_TIMER:
+    {
+        // Re-enable the DWM transitions that were disabled while snapping a maximized window into a
+        // zone. The timer id is the window handle (see SnapWindowToZoneOnMaximize).
+        KillTimer(m_window, wparam);
+        FancyZonesWindowUtils::SetWindowTransitionsDisabled(reinterpret_cast<HWND>(wparam), false);
+    }
+    break;
+
     default:
     {
         POINT ptScreen;
@@ -698,6 +837,11 @@ LRESULT FancyZones::WndProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         {
             auto hwnd = reinterpret_cast<HWND>(wparam);
             WindowCreated(hwnd);
+        }
+        else if (message == WM_PRIV_MAXIMIZE_TO_ZONE)
+        {
+            auto hwnd = reinterpret_cast<HWND>(wparam);
+            SnapWindowToZoneOnMaximize(hwnd, ptScreen);
         }
         else if (message == WM_PRIV_LAYOUT_HOTKEYS_FILE_UPDATE)
         {
@@ -1067,6 +1211,11 @@ void FancyZones::SettingsUpdate(SettingId id)
     {
         m_workAreaConfiguration.Clear();
         PostMessageW(m_window, WM_PRIV_INIT, NULL, NULL);
+    }
+    break;
+    case SettingId::SnapMaximizedWindowToZone:
+    {
+        UpdateMaximizeHook();
     }
     break;
     default:

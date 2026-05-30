@@ -458,6 +458,15 @@ void FancyZonesWindowUtils::ResetRoundCornersPreference(HWND window) noexcept
     }
 }
 
+void FancyZonesWindowUtils::SetWindowTransitionsDisabled(HWND window, bool disabled) noexcept
+{
+    BOOL value = disabled ? TRUE : FALSE;
+    if (!SUCCEEDED(DwmSetWindowAttribute(window, DWMWA_TRANSITIONS_FORCEDISABLED, &value, sizeof(value))))
+    {
+        Logger::error(L"Failed to {} window transitions", disabled ? L"disable" : L"enable");
+    }
+}
+
 void FancyZonesWindowUtils::MakeWindowTransparent(HWND window)
 {
     int const pos = -GetSystemMetrics(SM_CXVIRTUALSCREEN) - 8;

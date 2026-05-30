@@ -77,6 +77,7 @@ namespace Microsoft.PowerToys.Settings.UI.ViewModels
             _appLastZoneMoveWindows = Settings.Properties.FancyzonesAppLastZoneMoveWindows.Value;
             _openWindowOnActiveMonitor = Settings.Properties.FancyzonesOpenWindowOnActiveMonitor.Value;
             _restoreSize = Settings.Properties.FancyzonesRestoreSize.Value;
+            _snapMaximizedWindowToZone = Settings.Properties.FancyzonesSnapMaximizedWindowToZone.Value;
             _quickLayoutSwitch = Settings.Properties.FancyzonesQuickLayoutSwitch.Value;
             _flashZonesOnQuickLayoutSwitch = Settings.Properties.FancyzonesFlashZonesOnQuickSwitch.Value;
             _useCursorPosEditorStartupScreen = Settings.Properties.UseCursorposEditorStartupscreen.Value;
@@ -163,6 +164,7 @@ namespace Microsoft.PowerToys.Settings.UI.ViewModels
         private bool _openWindowOnActiveMonitor;
         private bool _spanZonesAcrossMonitors;
         private bool _restoreSize;
+        private bool _snapMaximizedWindowToZone;
         private bool _quickLayoutSwitch;
         private bool _flashZonesOnQuickLayoutSwitch;
         private bool _useCursorPosEditorStartupScreen;
@@ -483,6 +485,24 @@ namespace Microsoft.PowerToys.Settings.UI.ViewModels
                 {
                     _restoreSize = value;
                     Settings.Properties.FancyzonesRestoreSize.Value = value;
+                    NotifyPropertyChanged();
+                }
+            }
+        }
+
+        public bool SnapMaximizedWindowToZone
+        {
+            get
+            {
+                return _snapMaximizedWindowToZone;
+            }
+
+            set
+            {
+                if (value != _snapMaximizedWindowToZone)
+                {
+                    _snapMaximizedWindowToZone = value;
+                    Settings.Properties.FancyzonesSnapMaximizedWindowToZone.Value = value;
                     NotifyPropertyChanged();
                 }
             }

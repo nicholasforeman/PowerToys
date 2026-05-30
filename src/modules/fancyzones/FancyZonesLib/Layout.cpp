@@ -270,6 +270,42 @@ ZoneIndexSet Layout::ZonesFromPoint(POINT pt) const noexcept
     return capturedZones;
 }
 
+ZoneIndexSet Layout::ZonesFromPointPrioritizeTopLeft(POINT pt) const noexcept
+{
+    ZoneIndex chosen = -1;
+    RECT chosenRect{};
+
+    for (const auto& [zoneId, zone] : m_zones)
+    {
+        const RECT& zoneRect = zone.GetZoneRect();
+
+        // Inclusive bounds so a point exactly on a shared edge is considered to be inside both
+        // neighboring zones; the tie is then resolved below in favor of the top-left zone.
+        const bool inside = zoneRect.left <= pt.x && pt.x <= zoneRect.right &&
+                            zoneRect.top <= pt.y && pt.y <= zoneRect.bottom;
+        if (!inside)
+        {
+            continue;
+        }
+
+        // Highest priority is the top-most zone, then the left-most one.
+        if (chosen == -1 ||
+            zoneRect.top < chosenRect.top ||
+            (zoneRect.top == chosenRect.top && zoneRect.left < chosenRect.left))
+        {
+            chosen = zoneId;
+            chosenRect = zoneRect;
+        }
+    }
+
+    if (chosen == -1)
+    {
+        return {};
+    }
+
+    return { chosen };
+}
+
 ZoneIndexSet Layout::GetCombinedZoneRange(const ZoneIndexSet& initialZones, const ZoneIndexSet& finalZones) const noexcept
 {
     ZoneIndexSet combinedZones, result;

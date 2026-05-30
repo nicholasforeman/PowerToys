@@ -41,5 +41,9 @@ namespace FancyZonesWindowUtils
     void DisableRoundCorners(HWND window) noexcept;
     void ResetRoundCornersPreference(HWND window) noexcept;
 
+    // Forcibly disables (or re-enables) DWM minimize/maximize/restore animations for a window.
+    // Used to suppress the maximize animation when snapping a maximized window into a zone.
+    void SetWindowTransitionsDisabled(HWND window, bool disabled) noexcept;
+
     bool IsCursorTypeIndicatingSizeEvent();
 }

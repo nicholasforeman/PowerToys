@@ -1412,6 +1412,9 @@ opera.exe</value>
   <data name="FancyZones_RestoreSize.Content" xml:space="preserve">
     <value>Restore the original size of windows when unsnapping</value>
   </data>
+  <data name="FancyZones_SnapMaximizedWindowToZone.Content" xml:space="preserve">
+    <value>Snap a window to the zone under the cursor when it is maximized</value>
+  </data>
   <data name="ImageResizer_FallBackEncoderText.Header" xml:space="preserve">
     <value>Fallback encoder</value>
   </data>

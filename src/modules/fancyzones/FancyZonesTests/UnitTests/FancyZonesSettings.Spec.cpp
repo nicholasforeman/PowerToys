@@ -38,6 +38,7 @@ namespace FancyZonesUnitTests
         Assert::AreEqual(expected.appLastZone_moveWindows, actual.appLastZone_moveWindows);
         Assert::AreEqual(expected.openWindowOnActiveMonitor, actual.openWindowOnActiveMonitor);
         Assert::AreEqual(expected.restoreSize, actual.restoreSize);
+        Assert::AreEqual(expected.snapMaximizedWindowToZone, actual.snapMaximizedWindowToZone);
         Assert::AreEqual(expected.use_cursorpos_editor_startupscreen, actual.use_cursorpos_editor_startupscreen);
         Assert::AreEqual(expected.showZonesOnAllMonitors, actual.showZonesOnAllMonitors);
         Assert::AreEqual(expected.spanZonesAcrossMonitors, actual.spanZonesAcrossMonitors);
@@ -78,6 +79,7 @@ namespace FancyZonesUnitTests
             values.add_property(L"fancyzones_appLastZone_moveWindows", m_defaultSettings.appLastZone_moveWindows);
             values.add_property(L"fancyzones_openWindowOnActiveMonitor", m_defaultSettings.openWindowOnActiveMonitor);
             values.add_property(L"fancyzones_restoreSize", m_defaultSettings.restoreSize);
+            values.add_property(L"fancyzones_snapMaximizedWindowToZone", m_defaultSettings.snapMaximizedWindowToZone);
             values.add_property(L"use_cursorpos_editor_startupscreen", m_defaultSettings.use_cursorpos_editor_startupscreen);
             values.add_property(L"fancyzones_show_on_all_monitors", m_defaultSettings.showZonesOnAllMonitors);
             values.add_property(L"fancyzones_multi_monitor_mode", m_defaultSettings.spanZonesAcrossMonitors);
@@ -105,6 +107,7 @@ namespace FancyZonesUnitTests
         {
             //prepare data
             const Settings expected{
+                .snapMaximizedWindowToZone = true,
                 .excludedApps = L"app\r\napp1\r\napp2\r\nanother app",
                 .excludedAppsArray = { L"APP", L"APP1", L"APP2", L"ANOTHER APP" },
             };
@@ -121,6 +124,7 @@ namespace FancyZonesUnitTests
             values.add_property(L"fancyzones_appLastZone_moveWindows", expected.appLastZone_moveWindows);
             values.add_property(L"fancyzones_openWindowOnActiveMonitor", expected.openWindowOnActiveMonitor);
             values.add_property(L"fancyzones_restoreSize", expected.restoreSize);
+            values.add_property(L"fancyzones_snapMaximizedWindowToZone", expected.snapMaximizedWindowToZone);
             values.add_property(L"use_cursorpos_editor_startupscreen", expected.use_cursorpos_editor_startupscreen);
             values.add_property(L"fancyzones_show_on_all_monitors", expected.showZonesOnAllMonitors);
             values.add_property(L"fancyzones_multi_monitor_mode", expected.spanZonesAcrossMonitors);
